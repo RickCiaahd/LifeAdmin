@@ -4,9 +4,14 @@ import '../../domain/life_object.dart';
 import '../../state/app_controller.dart';
 
 class AddLifeObjectPage extends StatefulWidget {
-  const AddLifeObjectPage({super.key, required this.controller});
+  const AddLifeObjectPage({
+    super.key,
+    required this.controller,
+    this.initialObject,
+  });
 
   final AppController controller;
+  final LifeObject? initialObject;
 
   @override
   State<AddLifeObjectPage> createState() => _AddLifeObjectPageState();
@@ -18,6 +23,19 @@ class _AddLifeObjectPageState extends State<AddLifeObjectPage> {
   final _detailsController = TextEditingController();
   LifeObjectType _type = LifeObjectType.home;
 
+  bool get _isEditing => widget.initialObject != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final object = widget.initialObject;
+    if (object != null) {
+      _nameController.text = object.name;
+      _detailsController.text = object.details ?? '';
+      _type = object.type;
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -27,18 +45,27 @@ class _AddLifeObjectPageState extends State<AddLifeObjectPage> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    await widget.controller.addObject(
-      name: _nameController.text,
-      type: _type,
-      details: _detailsController.text,
-    );
+    if (_isEditing) {
+      await widget.controller.updateObject(
+        widget.initialObject!,
+        name: _nameController.text,
+        type: _type,
+        details: _detailsController.text,
+      );
+    } else {
+      await widget.controller.addObject(
+        name: _nameController.text,
+        type: _type,
+        details: _detailsController.text,
+      );
+    }
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Aggiungi cosa')),
+      appBar: AppBar(title: Text(_isEditing ? 'Modifica cosa' : 'Aggiungi cosa')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -86,7 +113,7 @@ class _AddLifeObjectPageState extends State<AddLifeObjectPage> {
             FilledButton.icon(
               onPressed: _save,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('SALVA'),
+              label: Text(_isEditing ? 'SALVA MODIFICHE' : 'SALVA'),
             ),
           ],
         ),
