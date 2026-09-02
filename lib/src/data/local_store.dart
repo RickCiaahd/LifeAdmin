@@ -8,6 +8,7 @@ import '../domain/responsibility.dart';
 class LocalStore {
   static const _objectsKey = 'life_objects';
   static const _responsibilitiesKey = 'responsibilities';
+  static const _reminderDaysKey = 'reminder_days';
 
   Future<List<LifeObject>> loadObjects() async {
     final prefs = await SharedPreferences.getInstance();
@@ -29,6 +30,15 @@ class LocalStore {
         .toList();
   }
 
+  Future<List<int>> loadReminderDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_reminderDaysKey);
+    if (stored == null || stored.isEmpty) return [30, 7, 1, 0];
+    final values = stored.map(int.tryParse).whereType<int>().toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
+    return values.isEmpty ? [30, 7, 1, 0] : values;
+  }
+
   Future<void> saveObjects(List<LifeObject> objects) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -44,6 +54,14 @@ class LocalStore {
     await prefs.setString(
       _responsibilitiesKey,
       jsonEncode(responsibilities.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  Future<void> saveReminderDays(List<int> days) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _reminderDaysKey,
+      days.map((value) => value.toString()).toList(),
     );
   }
 }
