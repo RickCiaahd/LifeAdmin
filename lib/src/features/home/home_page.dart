@@ -6,6 +6,7 @@ import '../../domain/responsibility.dart';
 import '../../state/app_controller.dart';
 import '../add/add_life_object_page.dart';
 import '../add/add_responsibility_page.dart';
+import '../object/life_object_detail_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.controller});
@@ -24,7 +25,16 @@ class HomePage extends StatelessWidget {
         final overdueCount = pending.where((item) => item.isOverdue).length;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('LifeAdmin')),
+          appBar: AppBar(
+            title: const Text('LifeAdmin'),
+            actions: [
+              IconButton(
+                tooltip: 'Test notifica',
+                onPressed: () => _sendTestNotification(context),
+                icon: const Icon(Icons.notifications_active_outlined),
+              ),
+            ],
+          ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _showAddMenu(context),
             icon: const Icon(Icons.add),
@@ -98,6 +108,14 @@ class HomePage extends StatelessWidget {
                     .length;
                 return Card(
                   child: ListTile(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => LifeObjectDetailPage(
+                          controller: controller,
+                          object: object,
+                        ),
+                      ),
+                    ),
                     leading: Icon(_iconFor(object.type)),
                     title: Text(object.name),
                     subtitle: object.details == null
@@ -112,6 +130,14 @@ class HomePage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _sendTestNotification(BuildContext context) async {
+    await controller.sendTestNotification();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Notifica di test inviata.')),
     );
   }
 
