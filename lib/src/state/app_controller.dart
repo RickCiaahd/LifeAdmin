@@ -116,6 +116,9 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> sendTestNotification() =>
+      _notifications.showTestNotification();
+
   Future<void> _persistResponsibilities() async {
     await _store.saveResponsibilities(_responsibilities);
     await _syncNotifications();
