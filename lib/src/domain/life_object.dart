@@ -13,6 +13,19 @@ class LifeObject {
   final LifeObjectType type;
   final String? details;
 
+  LifeObject copyWith({
+    String? name,
+    LifeObjectType? type,
+    String? details,
+  }) {
+    return LifeObject(
+      id: id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      details: details,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
