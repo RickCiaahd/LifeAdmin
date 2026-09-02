@@ -3,11 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../data/local_store.dart';
 import '../domain/life_object.dart';
 import '../domain/responsibility.dart';
+import '../notifications/notification_service.dart';
 
 class AppController extends ChangeNotifier {
-  AppController(this._store);
+  AppController(this._store, this._notifications);
 
   final LocalStore _store;
+  final NotificationService _notifications;
 
   final List<LifeObject> _objects = [];
   final List<Responsibility> _responsibilities = [];
@@ -32,6 +34,7 @@ class AppController extends ChangeNotifier {
       ]);
       await _store.saveObjects(_objects);
     }
+    await _syncNotifications();
     notifyListeners();
   }
 
@@ -73,7 +76,7 @@ class AppController extends ChangeNotifier {
         recurrenceInterval: recurrenceInterval,
       ),
     );
-    await _store.saveResponsibilities(_responsibilities);
+    await _persistResponsibilities();
     notifyListeners();
   }
 
@@ -100,7 +103,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    await _store.saveResponsibilities(_responsibilities);
+    await _persistResponsibilities();
     notifyListeners();
   }
 
@@ -109,9 +112,17 @@ class AppController extends ChangeNotifier {
     if (index < 0) return;
     _responsibilities[index] =
         item.copyWith(status: ResponsibilityStatus.dismissed);
-    await _store.saveResponsibilities(_responsibilities);
+    await _persistResponsibilities();
     notifyListeners();
   }
+
+  Future<void> _persistResponsibilities() async {
+    await _store.saveResponsibilities(_responsibilities);
+    await _syncNotifications();
+  }
+
+  Future<void> _syncNotifications() =>
+      _notifications.sync(_responsibilities);
 
   DateTime _nextDueDate(Responsibility item) {
     final interval = item.recurrenceInterval;
