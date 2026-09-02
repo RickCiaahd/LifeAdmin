@@ -14,7 +14,6 @@ class NotificationService {
   static const _channelId = 'life_admin_deadlines';
   static const _channelName = 'Scadenze';
   static const _channelDescription = 'Promemoria per scadenze e rinnovi';
-  static const _reminderDays = <int>[30, 7, 1, 0];
 
   Future<void> initialize() async {
     tz.initializeTimeZones();
@@ -53,12 +52,16 @@ class NotificationService {
     );
   }
 
-  Future<void> sync(List<Responsibility> responsibilities) async {
+  Future<void> sync(
+    List<Responsibility> responsibilities, {
+    required List<int> reminderDays,
+  }) async {
     await _plugin.cancelAll();
 
+    final uniqueDays = reminderDays.toSet().toList()..sort((a, b) => b.compareTo(a));
     for (final item in responsibilities) {
       if (item.status != ResponsibilityStatus.pending) continue;
-      for (final daysBefore in _reminderDays) {
+      for (final daysBefore in uniqueDays) {
         await _schedule(item, daysBefore);
       }
     }
