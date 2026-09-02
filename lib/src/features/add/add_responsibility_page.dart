@@ -5,9 +5,14 @@ import '../../domain/responsibility.dart';
 import '../../state/app_controller.dart';
 
 class AddResponsibilityPage extends StatefulWidget {
-  const AddResponsibilityPage({super.key, required this.controller});
+  const AddResponsibilityPage({
+    super.key,
+    required this.controller,
+    this.initialLifeObjectId,
+  });
 
   final AppController controller;
+  final String? initialLifeObjectId;
 
   @override
   State<AddResponsibilityPage> createState() => _AddResponsibilityPageState();
@@ -27,7 +32,11 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
   @override
   void initState() {
     super.initState();
-    _lifeObjectId = widget.controller.objects.first.id;
+    final requested = widget.initialLifeObjectId;
+    _lifeObjectId = requested != null &&
+            widget.controller.objects.any((object) => object.id == requested)
+        ? requested
+        : widget.controller.objects.first.id;
   }
 
   @override
