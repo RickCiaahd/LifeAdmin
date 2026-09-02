@@ -9,10 +9,12 @@ class AddResponsibilityPage extends StatefulWidget {
     super.key,
     required this.controller,
     this.initialLifeObjectId,
+    this.initialResponsibility,
   });
 
   final AppController controller;
   final String? initialLifeObjectId;
+  final Responsibility? initialResponsibility;
 
   @override
   State<AddResponsibilityPage> createState() => _AddResponsibilityPageState();
@@ -23,20 +25,34 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
+  final _intervalController = TextEditingController(text: '1');
 
   late String _lifeObjectId;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 7));
   RecurrenceUnit _recurrenceUnit = RecurrenceUnit.none;
-  int _recurrenceInterval = 1;
+
+  bool get _isEditing => widget.initialResponsibility != null;
 
   @override
   void initState() {
     super.initState();
-    final requested = widget.initialLifeObjectId;
-    _lifeObjectId = requested != null &&
-            widget.controller.objects.any((object) => object.id == requested)
-        ? requested
-        : widget.controller.objects.first.id;
+    final item = widget.initialResponsibility;
+    if (item != null) {
+      _lifeObjectId = item.lifeObjectId;
+      _titleController.text = item.title;
+      _amountController.text =
+          item.expectedAmount?.toStringAsFixed(2).replaceAll('.', ',') ?? '';
+      _notesController.text = item.notes ?? '';
+      _dueDate = item.dueDate;
+      _recurrenceUnit = item.recurrenceUnit;
+      _intervalController.text = item.recurrenceInterval.toString();
+    } else {
+      final requested = widget.initialLifeObjectId;
+      _lifeObjectId = requested != null &&
+              widget.controller.objects.any((object) => object.id == requested)
+          ? requested
+          : widget.controller.objects.first.id;
+    }
   }
 
   @override
@@ -44,6 +60,7 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
     _titleController.dispose();
     _amountController.dispose();
     _notesController.dispose();
+    _intervalController.dispose();
     super.dispose();
   }
 
@@ -60,23 +77,40 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final normalizedAmount = _amountController.text.trim().replaceAll(',', '.');
-    await widget.controller.addResponsibility(
-      lifeObjectId: _lifeObjectId,
-      title: _titleController.text,
-      dueDate: _dueDate,
-      expectedAmount:
-          normalizedAmount.isEmpty ? null : double.tryParse(normalizedAmount),
-      notes: _notesController.text,
-      recurrenceUnit: _recurrenceUnit,
-      recurrenceInterval: _recurrenceInterval,
-    );
+    final amount = normalizedAmount.isEmpty ? null : double.tryParse(normalizedAmount);
+    final interval = int.tryParse(_intervalController.text) ?? 1;
+
+    if (_isEditing) {
+      await widget.controller.updateResponsibility(
+        widget.initialResponsibility!,
+        lifeObjectId: _lifeObjectId,
+        title: _titleController.text,
+        dueDate: _dueDate,
+        expectedAmount: amount,
+        notes: _notesController.text,
+        recurrenceUnit: _recurrenceUnit,
+        recurrenceInterval: interval,
+      );
+    } else {
+      await widget.controller.addResponsibility(
+        lifeObjectId: _lifeObjectId,
+        title: _titleController.text,
+        dueDate: _dueDate,
+        expectedAmount: amount,
+        notes: _notesController.text,
+        recurrenceUnit: _recurrenceUnit,
+        recurrenceInterval: interval,
+      );
+    }
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Aggiungi scadenza')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Modifica scadenza' : 'Aggiungi scadenza'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -148,14 +182,12 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
             if (_recurrenceUnit != RecurrenceUnit.none) ...[
               const SizedBox(height: 16),
               TextFormField(
-                initialValue: '1',
+                controller: _intervalController,
                 decoration: const InputDecoration(
                   labelText: 'Ogni',
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
-                onChanged: (value) =>
-                    _recurrenceInterval = int.tryParse(value) ?? 1,
                 validator: (value) {
                   final parsed = int.tryParse(value ?? '');
                   if (parsed == null || parsed < 1) return 'Inserisci almeno 1';
@@ -176,7 +208,7 @@ class _AddResponsibilityPageState extends State<AddResponsibilityPage> {
             FilledButton.icon(
               onPressed: _save,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('SALVA'),
+              label: Text(_isEditing ? 'SALVA MODIFICHE' : 'SALVA'),
             ),
           ],
         ),
