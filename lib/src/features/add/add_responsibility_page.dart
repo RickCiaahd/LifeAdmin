@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../domain/life_object.dart';
 import '../../domain/responsibility.dart';
 import '../../state/app_controller.dart';
 
