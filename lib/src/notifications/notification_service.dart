@@ -36,6 +36,23 @@ class NotificationService {
         ?.requestNotificationsPermission();
   }
 
+  Future<void> showTestNotification() async {
+    await _plugin.show(
+      id: 900001,
+      title: 'LifeAdmin',
+      body: 'Le notifiche funzionano correttamente.',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: _channelDescription,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+    );
+  }
+
   Future<void> sync(List<Responsibility> responsibilities) async {
     await _plugin.cancelAll();
 
