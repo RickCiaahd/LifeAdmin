@@ -23,6 +23,9 @@ class HomePage extends StatelessWidget {
             .toList()
           ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
         final overdueCount = pending.where((item) => item.isOverdue).length;
+        final now = DateTime.now();
+        final dueThisMonth = controller.dueThisMonth(now);
+        final expectedThisMonth = controller.expectedAmountForMonth(now);
 
         return Scaffold(
           appBar: AppBar(
@@ -55,6 +58,33 @@ class HomePage extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SummaryMetric(
+                          label: 'Questo mese',
+                          value: '$dueThisMonth',
+                          caption: 'scadenze',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _SummaryMetric(
+                          label: 'Previsti',
+                          value: expectedThisMonth == 0
+                              ? '—'
+                              : '€ ${expectedThisMonth.toStringAsFixed(2)}',
+                          caption: 'importi inseriti',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               if (pending.isEmpty)
                 const Card(
                   child: Padding(
@@ -79,6 +109,7 @@ class HomePage extends StatelessWidget {
                     owner: owner,
                     onComplete: () => _complete(context, item),
                     onDismiss: () => controller.dismissResponsibility(item),
+                    onEdit: () => _editResponsibility(context, item),
                   );
                 }),
               const SizedBox(height: 24),
@@ -196,6 +227,20 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  Future<void> _editResponsibility(
+    BuildContext context,
+    Responsibility item,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AddResponsibilityPage(
+          controller: controller,
+          initialResponsibility: item,
+        ),
+      ),
+    );
+  }
+
   Future<void> _complete(
     BuildContext context,
     Responsibility item,
@@ -263,18 +308,45 @@ class HomePage extends StatelessWidget {
   }
 }
 
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.caption,
+  });
+
+  final String label;
+  final String value;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 4),
+        Text(value, style: Theme.of(context).textTheme.headlineSmall),
+        Text(caption, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
 class _ResponsibilityCard extends StatelessWidget {
   const _ResponsibilityCard({
     required this.item,
     required this.owner,
     required this.onComplete,
     required this.onDismiss,
+    required this.onEdit,
   });
 
   final Responsibility item;
   final LifeObject owner;
   final VoidCallback onComplete;
   final VoidCallback onDismiss;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -304,6 +376,11 @@ class _ResponsibilityCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
+                IconButton(
+                  tooltip: 'Modifica',
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                ),
                 if (item.isRecurring)
                   const Tooltip(
                     message: 'Ricorrente',
@@ -318,6 +395,10 @@ class _ResponsibilityCard extends StatelessWidget {
             if (item.expectedAmount != null) ...[
               const SizedBox(height: 4),
               Text('€ ${item.expectedAmount!.toStringAsFixed(2)}'),
+            ],
+            if (item.notes != null) ...[
+              const SizedBox(height: 4),
+              Text(item.notes!, style: Theme.of(context).textTheme.bodySmall),
             ],
             if (item.lastCompletedAt != null) ...[
               const SizedBox(height: 4),
