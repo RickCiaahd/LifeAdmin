@@ -7,6 +7,7 @@ import '../../state/app_controller.dart';
 import '../add/add_life_object_page.dart';
 import '../add/add_responsibility_page.dart';
 import '../object/life_object_detail_page.dart';
+import '../settings/settings_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.controller});
@@ -32,9 +33,13 @@ class HomePage extends StatelessWidget {
             title: const Text('LifeAdmin'),
             actions: [
               IconButton(
-                tooltip: 'Test notifica',
-                onPressed: () => _sendTestNotification(context),
-                icon: const Icon(Icons.notifications_active_outlined),
+                tooltip: 'Impostazioni',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SettingsPage(controller: controller),
+                  ),
+                ),
+                icon: const Icon(Icons.settings_outlined),
               ),
             ],
           ),
@@ -161,14 +166,6 @@ class HomePage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  Future<void> _sendTestNotification(BuildContext context) async {
-    await controller.sendTestNotification();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Notifica di test inviata.')),
     );
   }
 
