@@ -27,7 +27,9 @@ jobs:
         run: flutter --version
 
       - name: Generate Android platform
-        run: flutter create --platforms=android --org com.rickciaahd --project-name life_admin .
+        run: |
+          flutter create --platforms=android --org com.rickciaahd --project-name life_admin .
+          rm -f test/widget_test.dart
 
       - name: Configure Android notifications
         run: |
