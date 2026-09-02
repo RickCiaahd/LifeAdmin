@@ -15,8 +15,7 @@ class AppController extends ChangeNotifier {
   final List<Responsibility> _responsibilities = [];
 
   List<LifeObject> get objects => List.unmodifiable(_objects);
-  List<Responsibility> get responsibilities =>
-      List.unmodifiable(_responsibilities);
+  List<Responsibility> get responsibilities => List.unmodifiable(_responsibilities);
 
   Future<void> load() async {
     _objects
@@ -48,10 +47,34 @@ class AppController extends ChangeNotifier {
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: name.trim(),
         type: type,
-        details: details?.trim().isEmpty == true ? null : details?.trim(),
+        details: _clean(details),
       ),
     );
+    await _persistObjects();
+  }
+
+  Future<void> updateObject(
+    LifeObject object, {
+    required String name,
+    required LifeObjectType type,
+    String? details,
+  }) async {
+    final index = _objects.indexWhere((item) => item.id == object.id);
+    if (index < 0) return;
+    _objects[index] = LifeObject(
+      id: object.id,
+      name: name.trim(),
+      type: type,
+      details: _clean(details),
+    );
+    await _persistObjects();
+  }
+
+  Future<void> deleteObject(LifeObject object) async {
+    _objects.removeWhere((item) => item.id == object.id);
+    _responsibilities.removeWhere((item) => item.lifeObjectId == object.id);
     await _store.saveObjects(_objects);
+    await _persistResponsibilities();
     notifyListeners();
   }
 
@@ -71,11 +94,42 @@ class AppController extends ChangeNotifier {
         title: title.trim(),
         dueDate: dueDate,
         expectedAmount: expectedAmount,
-        notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
+        notes: _clean(notes),
         recurrenceUnit: recurrenceUnit,
         recurrenceInterval: recurrenceInterval,
       ),
     );
+    await _persistResponsibilities();
+    notifyListeners();
+  }
+
+  Future<void> updateResponsibility(
+    Responsibility item, {
+    required String lifeObjectId,
+    required String title,
+    required DateTime dueDate,
+    double? expectedAmount,
+    String? notes,
+    required RecurrenceUnit recurrenceUnit,
+    required int recurrenceInterval,
+  }) async {
+    final index = _responsibilities.indexWhere((value) => value.id == item.id);
+    if (index < 0) return;
+    _responsibilities[index] = item.copyWith(
+      lifeObjectId: lifeObjectId,
+      title: title.trim(),
+      dueDate: dueDate,
+      expectedAmount: expectedAmount,
+      notes: _clean(notes),
+      recurrenceUnit: recurrenceUnit,
+      recurrenceInterval: recurrenceInterval,
+    );
+    await _persistResponsibilities();
+    notifyListeners();
+  }
+
+  Future<void> deleteResponsibility(Responsibility item) async {
+    _responsibilities.removeWhere((value) => value.id == item.id);
     await _persistResponsibilities();
     notifyListeners();
   }
@@ -110,22 +164,53 @@ class AppController extends ChangeNotifier {
   Future<void> dismissResponsibility(Responsibility item) async {
     final index = _responsibilities.indexWhere((value) => value.id == item.id);
     if (index < 0) return;
-    _responsibilities[index] =
-        item.copyWith(status: ResponsibilityStatus.dismissed);
+    _responsibilities[index] = item.copyWith(status: ResponsibilityStatus.dismissed);
     await _persistResponsibilities();
     notifyListeners();
   }
 
-  Future<void> sendTestNotification() =>
-      _notifications.showTestNotification();
+  Future<void> restoreResponsibility(Responsibility item) async {
+    final index = _responsibilities.indexWhere((value) => value.id == item.id);
+    if (index < 0) return;
+    _responsibilities[index] = item.copyWith(status: ResponsibilityStatus.pending);
+    await _persistResponsibilities();
+    notifyListeners();
+  }
+
+  Future<void> sendTestNotification() => _notifications.showTestNotification();
+
+  double expectedAmountForMonth(DateTime month) {
+    return _responsibilities
+        .where(
+          (item) =>
+              item.status == ResponsibilityStatus.pending &&
+              item.dueDate.year == month.year &&
+              item.dueDate.month == month.month &&
+              item.expectedAmount != null,
+        )
+        .fold(0, (sum, item) => sum + item.expectedAmount!);
+  }
+
+  int dueThisMonth(DateTime month) => _responsibilities
+      .where(
+        (item) =>
+            item.status == ResponsibilityStatus.pending &&
+            item.dueDate.year == month.year &&
+            item.dueDate.month == month.month,
+      )
+      .length;
+
+  Future<void> _persistObjects() async {
+    await _store.saveObjects(_objects);
+    notifyListeners();
+  }
 
   Future<void> _persistResponsibilities() async {
     await _store.saveResponsibilities(_responsibilities);
     await _syncNotifications();
   }
 
-  Future<void> _syncNotifications() =>
-      _notifications.sync(_responsibilities);
+  Future<void> _syncNotifications() => _notifications.sync(_responsibilities);
 
   DateTime _nextDueDate(Responsibility item) {
     final interval = item.recurrenceInterval;
@@ -135,13 +220,13 @@ class AppController extends ChangeNotifier {
       case RecurrenceUnit.weeks:
         return item.dueDate.add(Duration(days: interval * 7));
       case RecurrenceUnit.months:
-        return DateTime(
+        return _safeDate(
           item.dueDate.year,
           item.dueDate.month + interval,
           item.dueDate.day,
         );
       case RecurrenceUnit.years:
-        return DateTime(
+        return _safeDate(
           item.dueDate.year + interval,
           item.dueDate.month,
           item.dueDate.day,
@@ -149,5 +234,16 @@ class AppController extends ChangeNotifier {
       case RecurrenceUnit.none:
         return item.dueDate;
     }
+  }
+
+  DateTime _safeDate(int year, int month, int day) {
+    final normalized = DateTime(year, month, 1);
+    final lastDay = DateTime(normalized.year, normalized.month + 1, 0).day;
+    return DateTime(normalized.year, normalized.month, day.clamp(1, lastDay));
+  }
+
+  String? _clean(String? value) {
+    final cleaned = value?.trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 }
