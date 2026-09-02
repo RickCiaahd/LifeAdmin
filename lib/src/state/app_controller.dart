@@ -13,9 +13,11 @@ class AppController extends ChangeNotifier {
 
   final List<LifeObject> _objects = [];
   final List<Responsibility> _responsibilities = [];
+  List<int> _reminderDays = [30, 7, 1, 0];
 
   List<LifeObject> get objects => List.unmodifiable(_objects);
   List<Responsibility> get responsibilities => List.unmodifiable(_responsibilities);
+  List<int> get reminderDays => List.unmodifiable(_reminderDays);
 
   Future<void> load() async {
     _objects
@@ -24,6 +26,7 @@ class AppController extends ChangeNotifier {
     _responsibilities
       ..clear()
       ..addAll(await _store.loadResponsibilities());
+    _reminderDays = await _store.loadReminderDays();
 
     if (_objects.isEmpty) {
       _objects.addAll([
@@ -177,6 +180,26 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setReminderEnabled(int daysBefore, bool enabled) async {
+    final updated = _reminderDays.toSet();
+    if (enabled) {
+      updated.add(daysBefore);
+    } else {
+      updated.remove(daysBefore);
+    }
+    _reminderDays = updated.toList()..sort((a, b) => b.compareTo(a));
+    await _store.saveReminderDays(_reminderDays);
+    await _syncNotifications();
+    notifyListeners();
+  }
+
+  Future<void> resetReminderDefaults() async {
+    _reminderDays = [30, 7, 1, 0];
+    await _store.saveReminderDays(_reminderDays);
+    await _syncNotifications();
+    notifyListeners();
+  }
+
   Future<void> sendTestNotification() => _notifications.showTestNotification();
 
   double expectedAmountForMonth(DateTime month) {
@@ -210,7 +233,10 @@ class AppController extends ChangeNotifier {
     await _syncNotifications();
   }
 
-  Future<void> _syncNotifications() => _notifications.sync(_responsibilities);
+  Future<void> _syncNotifications() => _notifications.sync(
+        _responsibilities,
+        reminderDays: _reminderDays,
+      );
 
   DateTime _nextDueDate(Responsibility item) {
     final interval = item.recurrenceInterval;
