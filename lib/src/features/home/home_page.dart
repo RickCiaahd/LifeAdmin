@@ -1,89 +1,228 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../domain/life_object.dart';
 import '../../domain/responsibility.dart';
+import '../../state/app_controller.dart';
+import '../add/add_life_object_page.dart';
+import '../add/add_responsibility_page.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, required this.controller});
 
-  static final _objects = <LifeObject>[
-    const LifeObject(id: 'car', name: 'Auto', type: LifeObjectType.vehicle),
-    const LifeObject(id: 'home', name: 'Casa', type: LifeObjectType.home),
-    const LifeObject(id: 'me', name: 'Io', type: LifeObjectType.person),
-  ];
-
-  static final _responsibilities = <Responsibility>[
-    Responsibility(
-      id: 'insurance',
-      lifeObjectId: 'car',
-      title: 'Assicurazione',
-      dueDate: DateTime.now().add(const Duration(days: 12)),
-      expectedAmount: 463,
-      recurrenceUnit: RecurrenceUnit.years,
-    ),
-    Responsibility(
-      id: 'tari',
-      lifeObjectId: 'home',
-      title: 'TARI',
-      dueDate: DateTime.now().subtract(const Duration(days: 2)),
-      expectedAmount: 126.40,
-    ),
-    Responsibility(
-      id: 'id-card',
-      lifeObjectId: 'me',
-      title: "Carta d'identità",
-      dueDate: DateTime.now().add(const Duration(days: 46)),
-      recurrenceUnit: RecurrenceUnit.years,
-      recurrenceInterval: 10,
-    ),
-  ];
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) {
-    final pending = [..._responsibilities]
-      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
-    final overdueCount = pending.where((item) => item.isOverdue).length;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final pending = controller.responsibilities
+            .where((item) => item.status == ResponsibilityStatus.pending)
+            .toList()
+          ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+        final overdueCount = pending.where((item) => item.isOverdue).length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('LifeAdmin'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
-        icon: const Icon(Icons.add),
-        label: const Text('Aggiungi'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            overdueCount > 0
-                ? '$overdueCount cosa richiede attenzione'
-                : 'Tutto sotto controllo',
-            style: Theme.of(context).textTheme.headlineSmall,
+        return Scaffold(
+          appBar: AppBar(title: const Text('LifeAdmin')),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => _showAddMenu(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Aggiungi'),
           ),
-          const SizedBox(height: 16),
-          ...pending.map((item) {
-            final owner = _objects.firstWhere(
-              (object) => object.id == item.lifeObjectId,
-            );
-            return _ResponsibilityCard(item: item, owner: owner);
-          }),
-          const SizedBox(height: 24),
-          Text('Le tue cose', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          ..._objects.map(
-            (object) => Card(
-              child: ListTile(
-                leading: Icon(_iconFor(object.type)),
-                title: Text(object.name),
-                trailing: const Icon(Icons.chevron_right),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                overdueCount > 0
+                    ? '$overdueCount ${overdueCount == 1 ? 'cosa richiede' : 'cose richiedono'} attenzione'
+                    : 'Tutto sotto controllo',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${pending.length} scadenze attive',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              if (pending.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
+                      'Non hai scadenze attive. Aggiungine una dal pulsante in basso.',
+                    ),
+                  ),
+                )
+              else
+                ...pending.map((item) {
+                  final owner = controller.objects.firstWhere(
+                    (object) => object.id == item.lifeObjectId,
+                    orElse: () => const LifeObject(
+                      id: 'unknown',
+                      name: 'Altro',
+                      type: LifeObjectType.other,
+                    ),
+                  );
+                  return _ResponsibilityCard(
+                    item: item,
+                    owner: owner,
+                    onComplete: () => _complete(context, item),
+                    onDismiss: () => controller.dismissResponsibility(item),
+                  );
+                }),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Le tue cose',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _addObject(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Aggiungi'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...controller.objects.map((object) {
+                final count = controller.responsibilities
+                    .where(
+                      (item) =>
+                          item.lifeObjectId == object.id &&
+                          item.status == ResponsibilityStatus.pending,
+                    )
+                    .length;
+                return Card(
+                  child: ListTile(
+                    leading: Icon(_iconFor(object.type)),
+                    title: Text(object.name),
+                    subtitle: object.details == null
+                        ? Text('$count scadenze attive')
+                        : Text('${object.details} · $count scadenze attive'),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                );
+              }),
+              const SizedBox(height: 96),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showAddMenu(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('Nuova scadenza'),
+                subtitle: const Text('Pagamento, rinnovo o manutenzione'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _addResponsibility(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text('Nuova cosa'),
+                subtitle: const Text('Auto, casa, persona, animale o altro'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _addObject(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addObject(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AddLifeObjectPage(controller: controller),
+      ),
+    );
+  }
+
+  Future<void> _addResponsibility(BuildContext context) async {
+    if (controller.objects.isEmpty) {
+      await _addObject(context);
+      if (controller.objects.isEmpty || !context.mounted) return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AddResponsibilityPage(controller: controller),
+      ),
+    );
+  }
+
+  Future<void> _complete(
+    BuildContext context,
+    Responsibility item,
+  ) async {
+    final amountController = TextEditingController(
+      text: item.expectedAmount?.toStringAsFixed(2).replaceAll('.', ','),
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(item.isRecurring ? 'Rinnova ${item.title}' : 'Completa ${item.title}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.isRecurring
+                  ? 'La prossima scadenza verrà calcolata automaticamente.'
+                  : 'La scadenza verrà segnata come completata.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Importo pagato (opzionale)',
+                prefixText: '€ ',
+                border: OutlineInputBorder(),
               ),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('ANNULLA'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(item.isRecurring ? 'RINNOVATA' : 'COMPLETATA'),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      final raw = amountController.text.trim().replaceAll(',', '.');
+      await controller.completeResponsibility(
+        item,
+        paidAmount: raw.isEmpty ? null : double.tryParse(raw),
+      );
+    }
+    amountController.dispose();
   }
 
   static IconData _iconFor(LifeObjectType type) {
@@ -99,19 +238,31 @@ class HomePage extends StatelessWidget {
 }
 
 class _ResponsibilityCard extends StatelessWidget {
-  const _ResponsibilityCard({required this.item, required this.owner});
+  const _ResponsibilityCard({
+    required this.item,
+    required this.owner,
+    required this.onComplete,
+    required this.onDismiss,
+  });
 
   final Responsibility item;
   final LifeObject owner;
+  final VoidCallback onComplete;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    final days = item.dueDate.difference(DateTime.now()).inDays;
-    final label = item.isOverdue
-        ? 'Scaduta da ${days.abs()} giorni'
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(item.dueDate.year, item.dueDate.month, item.dueDate.day);
+    final days = due.difference(today).inDays;
+    final label = days < 0
+        ? 'Scaduta da ${days.abs()} ${days.abs() == 1 ? 'giorno' : 'giorni'}'
         : days == 0
             ? 'Scade oggi'
-            : 'Scade tra $days giorni';
+            : days == 1
+                ? 'Scade domani'
+                : 'Scade tra $days giorni';
 
     return Card(
       child: Padding(
@@ -119,22 +270,51 @@ class _ResponsibilityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(owner.name, style: Theme.of(context).textTheme.labelLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    owner.name,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+                if (item.isRecurring)
+                  const Tooltip(
+                    message: 'Ricorrente',
+                    child: Icon(Icons.autorenew, size: 18),
+                  ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(item.title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
-            Text(label),
+            Text('$label · ${DateFormat('dd/MM/yyyy').format(item.dueDate)}'),
             if (item.expectedAmount != null) ...[
               const SizedBox(height: 4),
               Text('€ ${item.expectedAmount!.toStringAsFixed(2)}'),
             ],
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.tonal(
-                onPressed: () {},
-                child: Text(item.isOverdue ? 'RISOLVI' : 'GESTISCI'),
+            if (item.lastCompletedAt != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Ultima volta: ${DateFormat('dd/MM/yyyy').format(item.lastCompletedAt!)}'
+                '${item.lastPaidAmount == null ? '' : ' · € ${item.lastPaidAmount!.toStringAsFixed(2)}'}',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: onDismiss,
+                  child: const Text('NON PIÙ NECESSARIA'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: onComplete,
+                  child: Text(item.isRecurring ? 'RINNOVATA' : 'COMPLETATA'),
+                ),
+              ],
             ),
           ],
         ),
