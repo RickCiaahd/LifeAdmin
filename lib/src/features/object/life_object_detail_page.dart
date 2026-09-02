@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/life_object.dart';
 import '../../domain/responsibility.dart';
 import '../../state/app_controller.dart';
+import '../add/add_life_object_page.dart';
 import '../add/add_responsibility_page.dart';
 
 class LifeObjectDetailPage extends StatelessWidget {
@@ -21,6 +22,10 @@ class LifeObjectDetailPage extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
+        final current = controller.objects.firstWhere(
+          (item) => item.id == object.id,
+          orElse: () => object,
+        );
         final items = controller.responsibilities
             .where((item) => item.lifeObjectId == object.id)
             .toList();
@@ -42,13 +47,59 @@ class LifeObjectDetailPage extends StatelessWidget {
           });
 
         return Scaffold(
-          appBar: AppBar(title: Text(object.name)),
+          appBar: AppBar(
+            title: Text(current.name),
+            actions: [
+              PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AddLifeObjectPage(
+                          controller: controller,
+                          initialObject: current,
+                        ),
+                      ),
+                    );
+                  } else if (value == 'delete') {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text('Elimina questa voce?'),
+                        content: Text(
+                          'Verranno eliminate anche tutte le scadenze associate a ${current.name}.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext, false),
+                            child: const Text('ANNULLA'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('ELIMINA'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await controller.deleteObject(current);
+                      if (context.mounted) Navigator.pop(context);
+                    }
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Modifica')),
+                  PopupMenuItem(value: 'delete', child: Text('Elimina')),
+                ],
+              ),
+            ],
+          ),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => AddResponsibilityPage(
                   controller: controller,
-                  initialLifeObjectId: object.id,
+                  initialLifeObjectId: current.id,
                 ),
               ),
             ),
@@ -62,7 +113,7 @@ class LifeObjectDetailPage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 26,
-                    child: Icon(_iconFor(object.type)),
+                    child: Icon(_iconFor(current.type)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -70,10 +121,10 @@ class LifeObjectDetailPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          object.name,
+                          current.name,
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
-                        if (object.details != null) Text(object.details!),
+                        if (current.details != null) Text(current.details!),
                         Text('${active.length} scadenze attive'),
                       ],
                     ),
@@ -102,9 +153,30 @@ class LifeObjectDetailPage extends StatelessWidget {
                       title: Text(item.title),
                       subtitle: Text(
                         '${_dueLabel(item)} · ${DateFormat('dd/MM/yyyy').format(item.dueDate)}'
-                        '${item.expectedAmount == null ? '' : '\n€ ${item.expectedAmount!.toStringAsFixed(2)}'}',
+                        '${item.expectedAmount == null ? '' : '\n€ ${item.expectedAmount!.toStringAsFixed(2)}'}'
+                        '${item.notes == null ? '' : '\n${item.notes}'}',
                       ),
-                      isThreeLine: item.expectedAmount != null,
+                      isThreeLine: item.expectedAmount != null || item.notes != null,
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AddResponsibilityPage(
+                                  controller: controller,
+                                  initialResponsibility: item,
+                                ),
+                              ),
+                            );
+                          } else if (value == 'delete') {
+                            await controller.deleteResponsibility(item);
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Modifica')),
+                          PopupMenuItem(value: 'delete', child: Text('Elimina')),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -127,6 +199,14 @@ class LifeObjectDetailPage extends StatelessWidget {
                       leading: const Icon(Icons.history),
                       title: Text(item.title),
                       subtitle: Text(_historyLabel(item)),
+                      trailing: item.status == ResponsibilityStatus.dismissed ||
+                              item.status == ResponsibilityStatus.completed
+                          ? IconButton(
+                              tooltip: 'Ripristina',
+                              onPressed: () => controller.restoreResponsibility(item),
+                              icon: const Icon(Icons.restore),
+                            )
+                          : null,
                     ),
                   ),
                 ),
